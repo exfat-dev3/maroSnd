@@ -6,7 +6,7 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// どちらの環境変数名であっても絶対にキャッチする
+// トークンのフォールバック取得
 const BLOB_TOKEN = process.env.CHAT_READ_WRITE_TOKEN || process.env.BLOB_READ_WRITE_TOKEN;
 
 // Vercel Blobからメッセージを読み込む
@@ -24,7 +24,7 @@ async function loadMessages() {
     return await res.json();
   } catch (error) {
     console.error('Blob load error:', error);
-    return { general: [] };
+    return { general: [], dev: [], random: [] };
   }
 }
 
@@ -38,40 +38,51 @@ async function saveMessages(data) {
       token: BLOB_TOKEN,
     });
   } catch (error) {
-    console.error('Blob save error:', error);
+    console.error('Detailed Blob save error:', error);
+    throw error;
   }
 }
 
 // メッセージ取得API
 app.get('/api/messages', async (req, res) => {
-  const messages = await loadMessages();
-  res.json(messages);
+  try {
+    const messages = await loadMessages();
+    res.json(messages);
+  } catch (err) {
+    console.error('API GET ERROR:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // メッセージ送信API
 app.post('/api/messages', async (req, res) => {
-  const { channel, user, text } = req.body;
-  if (!text || !text.trim()) {
-    return res.status(400).json({ error: 'Text is required' });
+  try {
+    const { channel, user, text } = req.body;
+    if (!text || !text.trim()) {
+      return res.status(400).json({ error: 'Text is required' });
+    }
+
+    const messages = await loadMessages();
+    if (!messages[channel]) messages[channel] = [];
+
+    const now = new Date();
+    const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+    const newMsg = {
+      id: Date.now(),
+      user: user || 'ゲスト',
+      text: text.trim(),
+      time
+    };
+
+    messages[channel].push(newMsg);
+    await saveMessages(messages);
+
+    res.json({ success: true, message: newMsg });
+  } catch (err) {
+    console.error('API POST ERROR:', err);
+    res.status(500).json({ error: err.message });
   }
-
-  const messages = await loadMessages();
-  if (!messages[channel]) messages[channel] = [];
-
-  const now = new Date();
-  const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-
-  const newMsg = {
-    id: Date.now(),
-    user: user || 'ゲスト',
-    text: text.trim(),
-    time
-  };
-
-  messages[channel].push(newMsg);
-  await saveMessages(messages);
-
-  res.json({ success: true, message: newMsg });
 });
 
 // ローカル起動用
