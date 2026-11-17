@@ -4,13 +4,12 @@
   <meta charset="UTF-8">
   <title>maroSnd</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="/socket.io/socket.io.js"></script>
 </head>
 <body class="h-screen flex bg-[#313338] text-gray-100 overflow-hidden font-sans">
 
   <!-- 左端：サーバーアイコンバー -->
   <aside class="w-16 bg-[#1e1f22] flex flex-col items-center py-3 gap-3 shrink-0">
-    <div class="w-12 h-12 rounded-2xl bg-indigo-500 flex items-center justify-center font-bold text-white shadow-md cursor-pointer">
+    <div class="w-12 h-12 rounded-2xl bg-indigo-500 flex items-center justify-center font-bold text-white shadow-md">
       mS
     </div>
     <div class="w-8 h-[2px] bg-[#35363c] rounded-full"></div>
@@ -39,35 +38,28 @@
       </div>
     </div>
 
-    <!-- 左下：自分のプロフィールバー -->
+    <!-- 左下：プロフィール -->
     <div class="h-14 bg-[#232428] px-3 flex items-center justify-between">
       <div class="flex items-center gap-2 overflow-hidden">
-        <div class="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center font-bold text-sm shrink-0" id="avatarInitial">
-          U
-        </div>
+        <div class="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center font-bold text-sm shrink-0" id="avatarInitial">U</div>
         <div class="truncate">
           <div class="text-sm font-semibold truncate" id="displayUsername">User</div>
           <div class="text-xs text-emerald-400">● オンライン</div>
         </div>
       </div>
-      <button onclick="changeUser()" class="text-xs text-gray-400 hover:text-white px-2 py-1 rounded bg-[#2b2d31]">
-        変更
-      </button>
+      <button onclick="changeUser()" class="text-xs text-gray-400 hover:text-white px-2 py-1 rounded bg-[#2b2d31]">変更</button>
     </div>
   </nav>
 
-  <!-- 右側：メインチャットエリア -->
+  <!-- 右側：メインチャット -->
   <main class="flex-1 flex flex-col min-w-0">
-    <!-- チャンネルヘッダー -->
     <header class="h-12 px-4 flex items-center border-b border-[#1f2023] shadow-sm shrink-0">
       <span class="text-gray-400 text-xl mr-2">#</span>
       <h1 class="font-bold" id="currentChannelTitle">general</h1>
     </header>
 
-    <!-- メッセージ表示エリア -->
     <div id="messages" class="flex-1 overflow-y-auto p-4 space-y-4"></div>
 
-    <!-- メッセージ入力欄 -->
     <form id="chatForm" class="p-4 pt-0 shrink-0">
       <div class="bg-[#383a40] rounded-lg px-4 py-2.5 flex items-center gap-3">
         <input type="text" id="msgInput" placeholder="#general へメッセージを送信" autocomplete="off"
@@ -80,7 +72,6 @@
   </main>
 
   <script>
-    const socket = io();
     let currentChannel = 'general';
     let allMessages = {};
     let username = localStorage.getItem('marosnd_user') || 'ゲスト_' + Math.floor(Math.random() * 1000);
@@ -115,6 +106,8 @@
     function renderMessages() {
       const container = document.getElementById('messages');
       const list = allMessages[currentChannel] || [];
+      const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 50;
+
       container.innerHTML = list.map(m => `
         <div class="flex items-start gap-3 hover:bg-[#2e3035] -mx-2 px-2 py-1 rounded">
           <div class="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center font-bold text-white shrink-0 mt-0.5">
@@ -129,41 +122,55 @@
           </div>
         </div>
       `).join('');
-      container.scrollTop = container.scrollHeight;
+
+      if (isAtBottom) {
+        container.scrollTop = container.scrollHeight;
+      }
     }
 
     function escapeHtml(str) {
       return String(str)
-        .replace(/&/g, '&')
-        .replace(/</g, '<')
-        .replace(/>/g, '>')
-        .replace(/"/g, '"');
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
     }
 
-    socket.on('init', (data) => {
-      allMessages = data;
-      renderMessages();
-    });
-
-    socket.on('new_message', ({ channel, message }) => {
-      if (!allMessages[channel]) allMessages[channel] = [];
-      allMessages[channel].push(message);
-      if (channel === currentChannel) {
+    // 定期フェッチ（3秒ごとにサーバーから最新メッセージを取得）
+    async function fetchMessages() {
+      try {
+        const res = await fetch('/api/messages');
+        const data = await res.json();
+        allMessages = data;
         renderMessages();
+      } catch (err) {
+        console.error('同期エラー:', err);
       }
-    });
+    }
 
-    document.getElementById('chatForm').addEventListener('submit', (e) => {
+    setInterval(fetchMessages, 3000);
+    fetchMessages(); // 初回ロード
+
+    // メッセージ送信
+    document.getElementById('chatForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const input = document.getElementById('msgInput');
-      if (input.value.trim()) {
-        socket.emit('send_message', {
+      const text = input.value.trim();
+      if (!text) return;
+
+      input.value = '';
+
+      await fetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           channel: currentChannel,
           user: username,
-          text: input.value
-        });
-        input.value = '';
-      }
+          text: text
+        })
+      });
+
+      fetchMessages(); // 送信後すぐに再取得して反映
     });
 
     updateUserUI();

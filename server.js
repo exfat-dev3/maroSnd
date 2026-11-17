@@ -1,82 +1,81 @@
 const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
 const path = require('path');
 const { put, list } = require('@vercel/blob');
 
 const app = express();
-const server = http.createServer(app);
-const io = new Server(server);
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
 
-const PORT = 3000;
-
-// 📁 Vercel Blobからメッセージを読み込む関数
+// Vercel Blobからメッセージを読み込む
 async function loadMessages() {
   try {
     const { blobs } = await list({ prefix: 'messages.json' });
     if (blobs.length === 0) {
-      // 初期データ
       return {
-        general: [{ id: 1, user: 'System', text: 'maroSnd へようこそ！', time: '20:00' }],
-        dev: [{ id: 2, user: 'System', text: '開発チャンネルです', time: '20:00' }]
+        general: [{ id: 1, user: 'System', text: 'maroSnd へようこそ！(#general)', time: '20:00' }],
+        dev: [{ id: 2, user: 'System', text: '開発チャンネルです (#dev)', time: '20:00' }],
+        random: [{ id: 3, user: 'System', text: '雑談チャンネル (#random)', time: '20:00' }]
       };
     }
-    // BlobのURLから最新のJSONを取得（キャッシュ回避のクエリ付き）
     const res = await fetch(`${blobs[0].url}?t=${Date.now()}`);
     return await res.json();
   } catch (error) {
-    console.error('Blob読み込みエラー:', error);
+    console.error('Blob load error:', error);
     return { general: [] };
   }
 }
 
-// 💾 Vercel Blobにメッセージを上書き保存する関数
+// Vercel Blobにメッセージを上書き保存する
 async function saveMessages(data) {
   try {
     await put('messages.json', JSON.stringify(data, null, 2), {
       access: 'public',
-      allowOverwrite: true, // 👈 これでファイルを更新！
+      allowOverwrite: true,
       contentType: 'application/json',
     });
   } catch (error) {
-    console.error('Blob保存エラー:', error);
+    console.error('Blob save error:', error);
   }
 }
 
-app.use(express.static(path.join(__dirname, 'public')));
-app.use(express.json());
-
-// Socket.IO リアルタイム通信
-io.on('connection', async (socket) => {
-  // 接続時に全履歴を送信
+// メッセージ取得API
+app.get('/api/messages', async (req, res) => {
   const messages = await loadMessages();
-  socket.emit('init', messages);
+  res.json(messages);
+});
 
-  // メッセージ受信時
-  socket.on('send_message', async ({ channel, user, text }) => {
-    if (!text.trim()) return;
+// メッセージ送信API
+app.post('/api/messages', async (req, res) => {
+  const { channel, user, text } = req.body;
+  if (!text || !text.trim()) {
+    return res.status(400).json({ error: 'Text is required' });
+  }
 
-    const currentMessages = await loadMessages();
-    if (!currentMessages[channel]) currentMessages[channel] = [];
+  const messages = await loadMessages();
+  if (!messages[channel]) messages[channel] = [];
 
-    const now = new Date();
-    const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  const now = new Date();
+  const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
-    const newMsg = {
-      id: Date.now(),
-      user: user || 'ゲスト',
-      text: text.trim(),
-      time
-    };
+  const newMsg = {
+    id: Date.now(),
+    user: user || 'ゲスト',
+    text: text.trim(),
+    time
+  };
 
-    currentMessages[channel].push(newMsg);
-    await saveMessages(currentMessages); // Vercel Blobに保存
+  messages[channel].push(newMsg);
+  await saveMessages(messages);
 
-    // 全員にリアルタイム配信
-    io.emit('new_message', { channel, message: newMsg });
+  res.json({ success: true, message: newMsg });
+});
+
+// ローカル起動用
+if (require.main === module) {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`maroSnd running at http://localhost:${PORT}`);
   });
-});
+}
 
-server.listen(PORT, () => {
-  console.log(`maroSnd running at http://localhost:${PORT}`);
-});
+module.exports = app;
