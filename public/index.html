@@ -110,7 +110,12 @@
 
         // HTMLエスケープ
         function escapeHtml(str) {
-            return str.replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>').replace(/"/g, '"').replace(/'/g, ''');
+            return String(str)
+                .replace(/&/g, '&')
+                .replace(/</g, '<')
+                .replace(/>/g, '>')
+                .replace(/"/g, '"')
+                .replace(/'/g, ''');
         }
 
         // データ取得（ポーリング用）
@@ -142,7 +147,7 @@
 
                 if (res.ok) {
                     input.value = '';
-                    await fetchMessages(); // 送信後に即時最新化
+                    await fetchMessages();
                 } else {
                     const errData = await res.json();
                     alert('送信エラー: ' + (errData.error || '不明なエラー'));
