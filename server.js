@@ -6,13 +6,12 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 確実に CHAT_READ_WRITE_TOKEN を使うための定義
-const BLOB_TOKEN = process.env.CHAT_READ_WRITE_TOKEN;
+// どちらの環境変数名であっても絶対にキャッチする
+const BLOB_TOKEN = process.env.CHAT_READ_WRITE_TOKEN || process.env.BLOB_READ_WRITE_TOKEN;
 
 // Vercel Blobからメッセージを読み込む
 async function loadMessages() {
   try {
-    // 👈 ここに token: BLOB_TOKEN を渡す
     const { blobs } = await list({ prefix: 'messages.json', token: BLOB_TOKEN });
     if (blobs.length === 0) {
       return {
@@ -32,7 +31,6 @@ async function loadMessages() {
 // Vercel Blobにメッセージを上書き保存する
 async function saveMessages(data) {
   try {
-    // 👈 ここにも token: BLOB_TOKEN を渡す
     await put('messages.json', JSON.stringify(data, null, 2), {
       access: 'public',
       allowOverwrite: true,
