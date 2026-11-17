@@ -1,179 +1,169 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <title>maroSnd</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>maroSnd - Discord風リアルタイムSNS</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; background: #313338; color: #dbdee1; display: flex; height: 100vh; overflow: hidden; }
+        
+        /* サイドバー */
+        .sidebar { width: 240px; background: #2b2d31; display: flex; flex-direction: column; border-right: 1px solid #1f2023; }
+        .server-header { padding: 20px; font-weight: bold; font-size: 1.1rem; color: #fff; border-bottom: 1px solid #1f2023; }
+        .channels-list { padding: 10px; flex: 1; overflow-y: auto; }
+        .channel-item { padding: 10px; border-radius: 4px; cursor: pointer; margin-bottom: 4px; color: #949ba4; transition: 0.2s; }
+        .channel-item:hover { background: #35373c; color: #dbdee1; }
+        .channel-item.active { background: #404249; color: #fff; font-weight: bold; }
+        
+        .user-panel { padding: 10px; background: #232428; display: flex; align-items: center; gap: 8px; }
+        .user-panel input { background: #1e1f22; border: none; color: #fff; padding: 6px 10px; border-radius: 4px; width: 100%; font-size: 0.9rem; }
+
+        /* チャットメイン画面 */
+        .chat-container { flex: 1; display: flex; flex-direction: column; background: #313338; }
+        .chat-header { padding: 20px; font-weight: bold; font-size: 1.1rem; color: #fff; border-bottom: 1px solid #2b2d31; background: #313338; }
+        .messages-area { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
+        .message { display: flex; flex-direction: column; }
+        .message-header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+        .message-username { font-weight: bold; color: #fff; }
+        .message-time { font-size: 0.75rem; color: #949ba4; }
+        .message-text { color: #dbdee1; font-size: 0.95rem; word-break: break-all; line-height: 1.4; }
+
+        /* 入力エリア */
+        .input-area { padding: 20px; background: #313338; }
+        .input-wrapper { display: flex; background: #383a40; border-radius: 8px; padding: 10px; }
+        .input-wrapper textarea { flex: 1; background: transparent; border: none; color: #fff; resize: none; outline: none; font-size: 0.95rem; max-height: 100px; }
+        .input-wrapper button { background: #5865f2; color: #fff; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        .input-wrapper button:hover { background: #4752c4; }
+    </style>
 </head>
-<body class="h-screen flex bg-[#313338] text-gray-100 overflow-hidden font-sans">
+<body>
 
-  <!-- 左端：サーバーアイコンバー -->
-  <aside class="w-16 bg-[#1e1f22] flex flex-col items-center py-3 gap-3 shrink-0">
-    <div class="w-12 h-12 rounded-2xl bg-indigo-500 flex items-center justify-center font-bold text-white shadow-md">
-      mS
-    </div>
-    <div class="w-8 h-[2px] bg-[#35363c] rounded-full"></div>
-    <button onclick="changeUser()" title="ユーザー名を変更" class="w-12 h-12 rounded-full bg-[#2b2d31] hover:bg-emerald-600 hover:rounded-2xl transition-all flex items-center justify-center text-lg">
-      👤
-    </button>
-  </aside>
-
-  <!-- 中央左：チャンネル一覧 -->
-  <nav class="w-60 bg-[#2b2d31] flex flex-col justify-between shrink-0">
-    <div>
-      <header class="h-12 px-4 flex items-center font-bold border-b border-[#1f2023] shadow-sm">
-        maroSnd 公式サーバー
-      </header>
-      <div class="p-2 space-y-1">
-        <div class="px-2 py-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">テキストチャンネル</div>
-        <button onclick="switchChannel('general')" id="ch-general" class="channel-btn w-full text-left px-2 py-1.5 rounded bg-[#404249] text-white font-medium flex items-center gap-1.5">
-          <span class="text-gray-400">#</span> general
-        </button>
-        <button onclick="switchChannel('dev')" id="ch-dev" class="channel-btn w-full text-left px-2 py-1.5 rounded text-gray-400 hover:bg-[#35373c] hover:text-gray-200 flex items-center gap-1.5">
-          <span class="text-gray-400">#</span> dev
-        </button>
-        <button onclick="switchChannel('random')" id="ch-random" class="channel-btn w-full text-left px-2 py-1.5 rounded text-gray-400 hover:bg-[#35373c] hover:text-gray-200 flex items-center gap-1.5">
-          <span class="text-gray-400">#</span> random
-        </button>
-      </div>
-    </div>
-
-    <!-- 左下：プロフィール -->
-    <div class="h-14 bg-[#232428] px-3 flex items-center justify-between">
-      <div class="flex items-center gap-2 overflow-hidden">
-        <div class="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center font-bold text-sm shrink-0" id="avatarInitial">U</div>
-        <div class="truncate">
-          <div class="text-sm font-semibold truncate" id="displayUsername">User</div>
-          <div class="text-xs text-emerald-400">● オンライン</div>
+    <!-- サイドバー -->
+    <div class="sidebar">
+        <div class="server-header">🌌 maroSnd</div>
+        <div class="channels-list">
+            <div style="font-size: 0.8rem; color: #949ba4; padding: 6px 10px; text-transform: uppercase; font-weight: bold;">テキストチャンネル</div>
+            <div class="channel-item active" onclick="switchChannel('general')"># general</div>
+            <div class="channel-item" onclick="switchChannel('dev')"># dev</div>
+            <div class="channel-item" onclick="switchChannel('random')"># random</div>
         </div>
-      </div>
-      <button onclick="changeUser()" class="text-xs text-gray-400 hover:text-white px-2 py-1 rounded bg-[#2b2d31]">変更</button>
+        <div class="user-panel">
+            <input type="text" id="usernameInput" placeholder="ユーザー名" value="ゲスト">
+        </div>
     </div>
-  </nav>
 
-  <!-- 右側：メインチャット -->
-  <main class="flex-1 flex flex-col min-w-0">
-    <header class="h-12 px-4 flex items-center border-b border-[#1f2023] shadow-sm shrink-0">
-      <span class="text-gray-400 text-xl mr-2">#</span>
-      <h1 class="font-bold" id="currentChannelTitle">general</h1>
-    </header>
-
-    <div id="messages" class="flex-1 overflow-y-auto p-4 space-y-4"></div>
-
-    <form id="chatForm" class="p-4 pt-0 shrink-0">
-      <div class="bg-[#383a40] rounded-lg px-4 py-2.5 flex items-center gap-3">
-        <input type="text" id="msgInput" placeholder="#general へメッセージを送信" autocomplete="off"
-          class="w-full bg-transparent text-gray-100 placeholder-gray-400 focus:outline-none">
-        <button type="submit" class="px-3 py-1 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-medium rounded transition-colors shrink-0">
-          送信
-        </button>
-      </div>
-    </form>
-  </main>
-
-  <script>
-    let currentChannel = 'general';
-    let allMessages = {};
-    let username = localStorage.getItem('marosnd_user') || 'ゲスト_' + Math.floor(Math.random() * 1000);
-
-    function updateUserUI() {
-      document.getElementById('displayUsername').textContent = username;
-      document.getElementById('avatarInitial').textContent = username.charAt(0).toUpperCase();
-    }
-
-    function changeUser() {
-      const newName = prompt('新しいユーザー名を入力してください:', username);
-      if (newName && newName.trim()) {
-        username = newName.trim();
-        localStorage.setItem('marosnd_user', username);
-        updateUserUI();
-      }
-    }
-
-    function switchChannel(ch) {
-      currentChannel = ch;
-      document.getElementById('currentChannelTitle').textContent = ch;
-      document.getElementById('msgInput').placeholder = `#${ch} へメッセージを送信`;
-
-      document.querySelectorAll('.channel-btn').forEach(btn => {
-        btn.className = 'channel-btn w-full text-left px-2 py-1.5 rounded text-gray-400 hover:bg-[#35373c] hover:text-gray-200 flex items-center gap-1.5';
-      });
-      document.getElementById(`ch-${ch}`).className = 'channel-btn w-full text-left px-2 py-1.5 rounded bg-[#404249] text-white font-medium flex items-center gap-1.5';
-
-      renderMessages();
-    }
-
-    function renderMessages() {
-      const container = document.getElementById('messages');
-      const list = allMessages[currentChannel] || [];
-      const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 50;
-
-      container.innerHTML = list.map(m => `
-        <div class="flex items-start gap-3 hover:bg-[#2e3035] -mx-2 px-2 py-1 rounded">
-          <div class="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center font-bold text-white shrink-0 mt-0.5">
-            ${escapeHtml(m.user.charAt(0).toUpperCase())}
-          </div>
-          <div class="min-w-0">
-            <div class="flex items-baseline gap-2">
-              <span class="font-semibold text-white">${escapeHtml(m.user)}</span>
-              <span class="text-xs text-gray-400">${escapeHtml(m.time)}</span>
+    <!-- チャットエリア -->
+    <div class="chat-container">
+        <div class="chat-header" id="channelTitle"># general</div>
+        <div class="messages-area" id="messagesArea"></div>
+        <div class="input-area">
+            <div class="input-wrapper">
+                <textarea id="messageInput" placeholder="# general へメッセージを送信" rows="1" onkeydown="handleKey(event)"></textarea>
+                <button onclick="sendMessage()">送信</button>
             </div>
-            <p class="text-gray-200 break-words whitespace-pre-wrap mt-0.5">${escapeHtml(m.text)}</p>
-          </div>
         </div>
-      `).join('');
+    </div>
 
-      if (isAtBottom) {
-        container.scrollTop = container.scrollHeight;
-      }
-    }
+    <script>
+        let currentChannel = 'general';
+        let allMessages = { general: [], dev: [], random: [] };
 
-    function escapeHtml(str) {
-      return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-    }
+        // ユーザー名の保存復元
+        const usernameInput = document.getElementById('usernameInput');
+        const savedName = localStorage.getItem('marosnd_username');
+        if (savedName) usernameInput.value = savedName;
+        usernameInput.addEventListener('input', () => {
+            localStorage.setItem('marosnd_username', usernameInput.value);
+        });
 
-    // 定期フェッチ（3秒ごとにサーバーから最新メッセージを取得）
-    async function fetchMessages() {
-      try {
-        const res = await fetch('/api/messages');
-        const data = await res.json();
-        allMessages = data;
-        renderMessages();
-      } catch (err) {
-        console.error('同期エラー:', err);
-      }
-    }
+        // チャンネル切り替え
+        function switchChannel(channel) {
+            currentChannel = channel;
+            document.getElementById('channelTitle').textContent = `# ${channel}`;
+            document.querySelectorAll('.channel-item').forEach(el => {
+                el.classList.toggle('active', el.textContent.includes(channel));
+            });
+            document.getElementById('messageInput').placeholder = `# ${channel} へメッセージを送信`;
+            renderMessages();
+        }
 
-    setInterval(fetchMessages, 3000);
-    fetchMessages(); // 初回ロード
+        // メッセージ描画
+        function renderMessages() {
+            const area = document.getElementById('messagesArea');
+            const msgs = allMessages[currentChannel] || [];
+            area.innerHTML = '';
+            msgs.forEach(m => {
+                const div = document.createElement('div');
+                div.className = 'message';
+                div.innerHTML = `
+                    <div class="message-header">
+                        <span class="message-username">${escapeHtml(m.user)}</span>
+                        <span class="message-time">${m.time}</span>
+                    </div>
+                    <div class="message-text">${escapeHtml(m.text)}</div>
+                `;
+                area.appendChild(div);
+            });
+            area.scrollTop = area.scrollHeight;
+        }
 
-    // メッセージ送信
-    document.getElementById('chatForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const input = document.getElementById('msgInput');
-      const text = input.value.trim();
-      if (!text) return;
+        // HTMLエスケープ
+        function escapeHtml(str) {
+            return str.replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>').replace(/"/g, '"').replace(/'/g, ''');
+        }
 
-      input.value = '';
+        // データ取得（ポーリング用）
+        async function fetchMessages() {
+            try {
+                const res = await fetch('/api/messages');
+                if (res.ok) {
+                    allMessages = await res.json();
+                    renderMessages();
+                }
+            } catch (err) {
+                console.error('Failed to fetch messages:', err);
+            }
+        }
 
-      await fetch('/api/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          channel: currentChannel,
-          user: username,
-          text: text
-        })
-      });
+        // メッセージ送信
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const text = input.value.trim();
+            const user = usernameInput.value.trim() || 'ゲスト';
+            if (!text) return;
 
-      fetchMessages(); // 送信後すぐに再取得して反映
-    });
+            try {
+                const res = await fetch('/api/messages', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ channel: currentChannel, user, text })
+                });
 
-    updateUserUI();
-  </script>
+                if (res.ok) {
+                    input.value = '';
+                    await fetchMessages(); // 送信後に即時最新化
+                } else {
+                    const errData = await res.json();
+                    alert('送信エラー: ' + (errData.error || '不明なエラー'));
+                }
+            } catch (err) {
+                console.error('Send error:', err);
+                alert('送信に失敗しました。');
+            }
+        }
+
+        // Enterキーで送信（Shift+Enterで改行）
+        function handleKey(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        }
+
+        // 初回取得 & 3秒ごとの自動ポーリング同期
+        fetchMessages();
+        setInterval(fetchMessages, 3000);
+    </script>
 </body>
 </html>
