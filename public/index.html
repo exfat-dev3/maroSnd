@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>maroSnd</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body class="h-screen flex bg-[#313338] text-gray-100 overflow-hidden font-sans">
+
+  <!-- 左端：サーバーアイコンバー -->
+  <aside class="w-16 bg-[#1e1f22] flex flex-col items-center py-3 gap-3 shrink-0">
+    <div class="w-12 h-12 rounded-2xl bg-indigo-500 flex items-center justify-center font-bold text-white shadow-md cursor-pointer">
+      mS
+    </div>
+    <div class="w-8 h-[2px] bg-[#35363c] rounded-full"></div>
+    <button onclick="changeUser()" title="ユーザー名を変更" class="w-12 h-12 rounded-full bg-[#2b2d31] hover:bg-emerald-600 hover:rounded-2xl transition-all flex items-center justify-center text-lg">
+      👤
+    </button>
+  </aside>
+
+  <!-- 中央左：チャンネル一覧 -->
+  <nav class="w-60 bg-[#2b2d31] flex flex-col justify-between shrink-0">
+    <div>
+      <header class="h-12 px-4 flex items-center font-bold border-b border-[#1f2023] shadow-sm">
+        maroSnd 公式サーバー
+      </header>
+      <div class="p-2 space-y-1">
+        <div class="px-2 py-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">テキストチャンネル</div>
+        <button onclick="switchChannel('general')" id="ch-general" class="channel-btn w-full text-left px-2 py-1.5 rounded bg-[#404249] text-white font-medium flex items-center gap-1.5">
+          <span class="text-gray-400">#</span> general
+        </button>
+        <button onclick="switchChannel('dev')" id="ch-dev" class="channel-btn w-full text-left px-2 py-1.5 rounded text-gray-400 hover:bg-[#35373c] hover:text-gray-200 flex items-center gap-1.5">
+          <span class="text-gray-400">#</span> dev
+        </button>
+        <button onclick="switchChannel('random')" id="ch-random" class="channel-btn w-full text-left px-2 py-1.5 rounded text-gray-400 hover:bg-[#35373c] hover:text-gray-200 flex items-center gap-1.5">
+          <span class="text-gray-400">#</span> random
+        </button>
+      </div>
+    </div>
+
+    <!-- 左下：自分のプロフィールバー -->
+    <div class="h-14 bg-[#232428] px-3 flex items-center justify-between">
+      <div class="flex items-center gap-2 overflow-hidden">
+        <div class="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center font-bold text-sm shrink-0" id="avatarInitial">
+          U
+        </div>
+        <div class="truncate">
+          <div class="text-sm font-semibold truncate" id="displayUsername">User</div>
+          <div class="text-xs text-emerald-400">● オンライン</div>
+        </div>
+      </div>
+      <button onclick="changeUser()" class="text-xs text-gray-400 hover:text-white px-2 py-1 rounded bg-[#2b2d31]">
+        変更
+      </button>
+    </div>
+  </nav>
+
+  <!-- 右側：メインチャットエリア -->
+  <main class="flex-1 flex flex-col min-w-0">
+    <!-- チャンネルヘッダー -->
+    <header class="h-12 px-4 flex items-center border-b border-[#1f2023] shadow-sm shrink-0">
+      <span class="text-gray-400 text-xl mr-2">#</span>
+      <h1 class="font-bold" id="currentChannelTitle">general</h1>
+    </header>
+
+    <!-- メッセージ表示エリア -->
+    <div id="messages" class="flex-1 overflow-y-auto p-4 space-y-4"></div>
+
+    <!-- メッセージ入力欄 -->
+    <form id="chatForm" class="p-4 pt-0 shrink-0">
+      <div class="bg-[#383a40] rounded-lg px-4 py-2.5 flex items-center gap-3">
+        <input type="text" id="msgInput" placeholder="#general へメッセージを送信" autocomplete="off"
+          class="w-full bg-transparent text-gray-100 placeholder-gray-400 focus:outline-none">
+        <button type="submit" class="px-3 py-1 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-medium rounded transition-colors shrink-0">
+          送信
+        </button>
+      </div>
+    </form>
+  </main>
+
+  <script>
+    const socket = io();
+    let currentChannel = 'general';
+    let allMessages = {};
+    let username = localStorage.getItem('marosnd_user') || 'ゲスト_' + Math.floor(Math.random() * 1000);
+
+    function updateUserUI() {
+      document.getElementById('displayUsername').textContent = username;
+      document.getElementById('avatarInitial').textContent = username.charAt(0).toUpperCase();
+    }
+
+    function changeUser() {
+      const newName = prompt('新しいユーザー名を入力してください:', username);
+      if (newName && newName.trim()) {
+        username = newName.trim();
+        localStorage.setItem('marosnd_user', username);
+        updateUserUI();
+      }
+    }
+
+    function switchChannel(ch) {
+      currentChannel = ch;
+      document.getElementById('currentChannelTitle').textContent = ch;
+      document.getElementById('msgInput').placeholder = `#${ch} へメッセージを送信`;
+
+      document.querySelectorAll('.channel-btn').forEach(btn => {
+        btn.className = 'channel-btn w-full text-left px-2 py-1.5 rounded text-gray-400 hover:bg-[#35373c] hover:text-gray-200 flex items-center gap-1.5';
+      });
+      document.getElementById(`ch-${ch}`).className = 'channel-btn w-full text-left px-2 py-1.5 rounded bg-[#404249] text-white font-medium flex items-center gap-1.5';
+
+      renderMessages();
+    }
+
+    function renderMessages() {
+      const container = document.getElementById('messages');
+      const list = allMessages[currentChannel] || [];
+      container.innerHTML = list.map(m => `
+        <div class="flex items-start gap-3 hover:bg-[#2e3035] -mx-2 px-2 py-1 rounded">
+          <div class="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center font-bold text-white shrink-0 mt-0.5">
+            ${escapeHtml(m.user.charAt(0).toUpperCase())}
+          </div>
+          <div class="min-w-0">
+            <div class="flex items-baseline gap-2">
+              <span class="font-semibold text-white">${escapeHtml(m.user)}</span>
+              <span class="text-xs text-gray-400">${escapeHtml(m.time)}</span>
+            </div>
+            <p class="text-gray-200 break-words whitespace-pre-wrap mt-0.5">${escapeHtml(m.text)}</p>
+          </div>
+        </div>
+      `).join('');
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&')
+        .replace(/</g, '<')
+        .replace(/>/g, '>')
+        .replace(/"/g, '"');
+    }
+
+    socket.on('init', (data) => {
+      allMessages = data;
+      renderMessages();
+    });
+
+    socket.on('new_message', ({ channel, message }) => {
+      if (!allMessages[channel]) allMessages[channel] = [];
+      allMessages[channel].push(message);
+      if (channel === currentChannel) {
+        renderMessages();
+      }
+    });
+
+    document.getElementById('chatForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const input = document.getElementById('msgInput');
+      if (input.value.trim()) {
+        socket.emit('send_message', {
+          channel: currentChannel,
+          user: username,
+          text: input.value
+        });
+        input.value = '';
+      }
+    });
+
+    updateUserUI();
+  </script>
+</body>
+</html>
